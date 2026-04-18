@@ -81,7 +81,7 @@ function Hallazgos() {
                       {summaryData[pop].idx?.toFixed(2)}/5
                     </p>
                   </div>
-                  <Button onClick={() => generate(pop)} disabled={loadingPop === pop}>
+                  <Button onClick={() => run(pop)} disabled={loadingPop === pop}>
                     {loadingPop === pop ? (
                       <>
                         <Loader2 className="mr-1 h-4 w-4 animate-spin" /> Generando…
