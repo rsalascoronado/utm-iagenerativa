@@ -9,38 +9,146 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as MetodologiaRouteImport } from './routes/metodologia'
+import { Route as HallazgosRouteImport } from './routes/hallazgos'
+import { Route as EstudiantesRouteImport } from './routes/estudiantes'
+import { Route as DocentesRouteImport } from './routes/docentes'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EstudiantesVariablesRouteImport } from './routes/estudiantes.variables'
+import { Route as DocentesVariablesRouteImport } from './routes/docentes.variables'
 
+const MetodologiaRoute = MetodologiaRouteImport.update({
+  id: '/metodologia',
+  path: '/metodologia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HallazgosRoute = HallazgosRouteImport.update({
+  id: '/hallazgos',
+  path: '/hallazgos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EstudiantesRoute = EstudiantesRouteImport.update({
+  id: '/estudiantes',
+  path: '/estudiantes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocentesRoute = DocentesRouteImport.update({
+  id: '/docentes',
+  path: '/docentes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EstudiantesVariablesRoute = EstudiantesVariablesRouteImport.update({
+  id: '/variables',
+  path: '/variables',
+  getParentRoute: () => EstudiantesRoute,
+} as any)
+const DocentesVariablesRoute = DocentesVariablesRouteImport.update({
+  id: '/variables',
+  path: '/variables',
+  getParentRoute: () => DocentesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/docentes': typeof DocentesRouteWithChildren
+  '/estudiantes': typeof EstudiantesRouteWithChildren
+  '/hallazgos': typeof HallazgosRoute
+  '/metodologia': typeof MetodologiaRoute
+  '/docentes/variables': typeof DocentesVariablesRoute
+  '/estudiantes/variables': typeof EstudiantesVariablesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/docentes': typeof DocentesRouteWithChildren
+  '/estudiantes': typeof EstudiantesRouteWithChildren
+  '/hallazgos': typeof HallazgosRoute
+  '/metodologia': typeof MetodologiaRoute
+  '/docentes/variables': typeof DocentesVariablesRoute
+  '/estudiantes/variables': typeof EstudiantesVariablesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/docentes': typeof DocentesRouteWithChildren
+  '/estudiantes': typeof EstudiantesRouteWithChildren
+  '/hallazgos': typeof HallazgosRoute
+  '/metodologia': typeof MetodologiaRoute
+  '/docentes/variables': typeof DocentesVariablesRoute
+  '/estudiantes/variables': typeof EstudiantesVariablesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/docentes'
+    | '/estudiantes'
+    | '/hallazgos'
+    | '/metodologia'
+    | '/docentes/variables'
+    | '/estudiantes/variables'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/docentes'
+    | '/estudiantes'
+    | '/hallazgos'
+    | '/metodologia'
+    | '/docentes/variables'
+    | '/estudiantes/variables'
+  id:
+    | '__root__'
+    | '/'
+    | '/docentes'
+    | '/estudiantes'
+    | '/hallazgos'
+    | '/metodologia'
+    | '/docentes/variables'
+    | '/estudiantes/variables'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DocentesRoute: typeof DocentesRouteWithChildren
+  EstudiantesRoute: typeof EstudiantesRouteWithChildren
+  HallazgosRoute: typeof HallazgosRoute
+  MetodologiaRoute: typeof MetodologiaRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/metodologia': {
+      id: '/metodologia'
+      path: '/metodologia'
+      fullPath: '/metodologia'
+      preLoaderRoute: typeof MetodologiaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hallazgos': {
+      id: '/hallazgos'
+      path: '/hallazgos'
+      fullPath: '/hallazgos'
+      preLoaderRoute: typeof HallazgosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/estudiantes': {
+      id: '/estudiantes'
+      path: '/estudiantes'
+      fullPath: '/estudiantes'
+      preLoaderRoute: typeof EstudiantesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docentes': {
+      id: '/docentes'
+      path: '/docentes'
+      fullPath: '/docentes'
+      preLoaderRoute: typeof DocentesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,12 +156,63 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/estudiantes/variables': {
+      id: '/estudiantes/variables'
+      path: '/variables'
+      fullPath: '/estudiantes/variables'
+      preLoaderRoute: typeof EstudiantesVariablesRouteImport
+      parentRoute: typeof EstudiantesRoute
+    }
+    '/docentes/variables': {
+      id: '/docentes/variables'
+      path: '/variables'
+      fullPath: '/docentes/variables'
+      preLoaderRoute: typeof DocentesVariablesRouteImport
+      parentRoute: typeof DocentesRoute
+    }
   }
 }
 
+interface DocentesRouteChildren {
+  DocentesVariablesRoute: typeof DocentesVariablesRoute
+}
+
+const DocentesRouteChildren: DocentesRouteChildren = {
+  DocentesVariablesRoute: DocentesVariablesRoute,
+}
+
+const DocentesRouteWithChildren = DocentesRoute._addFileChildren(
+  DocentesRouteChildren,
+)
+
+interface EstudiantesRouteChildren {
+  EstudiantesVariablesRoute: typeof EstudiantesVariablesRoute
+}
+
+const EstudiantesRouteChildren: EstudiantesRouteChildren = {
+  EstudiantesVariablesRoute: EstudiantesVariablesRoute,
+}
+
+const EstudiantesRouteWithChildren = EstudiantesRoute._addFileChildren(
+  EstudiantesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DocentesRoute: DocentesRouteWithChildren,
+  EstudiantesRoute: EstudiantesRouteWithChildren,
+  HallazgosRoute: HallazgosRoute,
+  MetodologiaRoute: MetodologiaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
