@@ -8,6 +8,8 @@ import { Loader2, RefreshCw, Sparkles, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { summaryData } from "@/lib/data";
+import { generateInsights } from "@/server/insights.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 type Insights = {
   resumen: string[];
@@ -30,25 +32,17 @@ function Hallazgos() {
   const [loadingPop, setLoadingPop] = useState<"estudiantes" | "docentes" | null>(null);
   const [data, setData] = useState<{ estudiantes?: Insights; docentes?: Insights }>({});
   const [error, setError] = useState<string | null>(null);
+  const generate = useServerFn(generateInsights);
 
-  async function generate(pop: "estudiantes" | "docentes") {
+  async function run(pop: "estudiantes" | "docentes") {
     setLoadingPop(pop);
     setError(null);
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hallazgos`;
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ population: pop, summary: summaryData[pop] }),
-      });
-      if (resp.status === 429) throw new Error("Límite de uso alcanzado, intenta de nuevo en unos minutos.");
-      if (resp.status === 402) throw new Error("Sin créditos disponibles. Agrega créditos en Settings → Workspace → Usage.");
-      if (!resp.ok) throw new Error(`Error ${resp.status}`);
-      const json = (await resp.json()) as Insights;
-      setData((prev) => ({ ...prev, [pop]: json }));
+      const result = (await generate({
+        data: { population: pop, summary: summaryData[pop] as any },
+      })) as Insights | { error: string };
+      if ("error" in result) throw new Error(result.error);
+      setData((prev) => ({ ...prev, [pop]: result }));
       toast.success(`Hallazgos generados para ${pop}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Error desconocido";
