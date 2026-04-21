@@ -2,6 +2,8 @@ import { Outlet, createRootRoute, HeadContent, Scripts, Link } from "@tanstack/r
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { PWARegister } from "@/components/PWARegister";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
 
 import appCss from "../styles.css?url";
 
@@ -96,6 +98,8 @@ function RootComponent() {
         </main>
       </SidebarInset>
       <Toaster richColors position="top-right" />
+      <OfflineIndicator />
+      <PWARegister />
     </SidebarProvider>
   );
 }
