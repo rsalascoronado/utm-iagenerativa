@@ -1,14 +1,15 @@
 /* UTM Encuesta Dashboard — Service Worker
- * Estrategia:
+ * Estrategias:
  *  - Precache de assets básicos al instalar.
- *  - Navegación HTML: network-first con fallback a caché (offline-friendly).
+ *  - Navegación HTML: network-first con fallback a caché.
  *  - Assets estáticos (JS/CSS/imágenes/fuentes): stale-while-revalidate.
- *  - Datos JSON (/_build/.../*.json y /data/): stale-while-revalidate.
+ *  - Server function `generateInsights`: caché dedicada con fallback JSON estructurado.
  *  - Resto: pasa por la red.
  */
-const VERSION = "utm-pwa-v1";
+const VERSION = "utm-pwa-v2";
 const STATIC_CACHE = `${VERSION}-static`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
+const INSIGHTS_CACHE = `${VERSION}-insights`;
 const OFFLINE_URL = "/";
 
 const PRECACHE_URLS = [
@@ -52,12 +53,9 @@ function isStaticAsset(url) {
   );
 }
 
-function isJsonData(url) {
-  return (
-    url.pathname.endsWith(".json") ||
-    url.pathname.startsWith("/data/") ||
-    url.pathname.includes("/insights")
-  );
+function isInsightsRequest(url) {
+  // TanStack server function URL contains the function id; match by name.
+  return /generateInsights/i.test(url.pathname + url.search);
 }
 
 async function networkFirst(request, cacheName) {
@@ -91,22 +89,104 @@ async function staleWhileRevalidate(request, cacheName) {
   return cached || fetchPromise;
 }
 
+/**
+ * Fallback estructurado para la server function de hallazgos.
+ * 1) Intenta red.
+ * 2) Si falla, devuelve la última respuesta cacheada para esa población.
+ * 3) Si no hay caché, devuelve un JSON con flag `offline: true` que el cliente
+ *    puede detectar y combinar con el respaldo en localStorage.
+ */
+async function insightsHandler(request) {
+  const cache = await caches.open(INSIGHTS_CACHE);
+
+  // Identifica la población a partir del cuerpo (POST) para usar como cache key.
+  let population = "default";
+  try {
+    const cloned = request.clone();
+    const body = await cloned.json().catch(() => null);
+    const pop = body?.data?.population;
+    if (pop === "estudiantes" || pop === "docentes") population = pop;
+  } catch {
+    /* noop */
+  }
+  const cacheKey = new Request(
+    `${self.location.origin}/__insights-cache/${population}`,
+    { method: "GET" },
+  );
+
+  try {
+    const fresh = await fetch(request);
+    if (fresh && fresh.ok) {
+      // Guardamos clon como GET para poder recuperarlo independientemente del POST original.
+      const body = await fresh.clone().text();
+      cache.put(
+        cacheKey,
+        new Response(body, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "X-UTM-Cached-At": new Date().toISOString(),
+          },
+        }),
+      );
+    }
+    return fresh;
+  } catch {
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      const cachedAt = cached.headers.get("X-UTM-Cached-At") || "";
+      const text = await cached.text();
+      return new Response(text, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-UTM-Offline-Cache": "1",
+          "X-UTM-Cached-At": cachedAt,
+        },
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        offline: true,
+        error:
+          "Sin conexión y sin análisis previo guardado para esta población.",
+        population,
+      }),
+      {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-UTM-Offline-Cache": "1",
+        },
+      },
+    );
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET") return;
-
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Saltar server functions de TanStack (POSTs ya filtrados; GETs dinámicos: pasar por red)
-  if (url.pathname.startsWith("/_serverFn") || url.pathname.startsWith("/_server")) return;
+  // Server function de hallazgos: handler dedicado (POST permitido)
+  if (isInsightsRequest(url)) {
+    event.respondWith(insightsHandler(request));
+    return;
+  }
+
+  if (request.method !== "GET") return;
+
+  // Otras server functions: pasar por red sin tocar caché
+  if (url.pathname.startsWith("/_serverFn") || url.pathname.startsWith("/_server")) {
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request, RUNTIME_CACHE));
     return;
   }
 
-  if (isStaticAsset(url) || isJsonData(url)) {
+  if (isStaticAsset(url)) {
     event.respondWith(staleWhileRevalidate(request, RUNTIME_CACHE));
     return;
   }
