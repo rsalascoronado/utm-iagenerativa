@@ -143,14 +143,15 @@ function Hallazgos() {
                       {summaryData[pop].idx?.toFixed(2)}/5
                     </p>
                   </div>
-                  <Button onClick={() => run(pop)} disabled={loadingPop === pop}>
-                    {loadingPop === pop ? (
+                  <Button onClick={() => run(pop)} disabled={popState[pop].loading}>
+                    {popState[pop].loading ? (
                       <>
                         <Loader2 className="mr-1 h-4 w-4 animate-spin" /> Generando…
                       </>
                     ) : data[pop] ? (
                       <>
-                        <RefreshCw className="mr-1 h-4 w-4" /> Regenerar
+                        <RefreshCw className="mr-1 h-4 w-4" />{" "}
+                        {popState[pop].error ? "Reintentar" : "Regenerar"}
                       </>
                     ) : (
                       <>
@@ -162,10 +163,28 @@ function Hallazgos() {
               </CardHeader>
             </Card>
 
-            {error && loadingPop === null && (
+            {popState[pop].error && !popState[pop].loading && (
               <Card className="border-destructive/50 bg-destructive/5">
-                <CardContent className="flex items-center gap-2 py-4 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4" /> {error}
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm text-destructive">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>
+                      {popState[pop].error}
+                      {popState[pop].attempts > 1 && (
+                        <span className="ml-1 opacity-70">
+                          (intento {popState[pop].attempts})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => run(pop)}
+                    className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                  >
+                    <RefreshCw className="mr-1 h-3 w-3" /> Reintentar
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -246,7 +265,7 @@ function Hallazgos() {
               </div>
             )}
 
-            {!data[pop] && loadingPop !== pop && !error && (
+            {!data[pop] && !popState[pop].loading && !popState[pop].error && (
               <Card className="border-dashed">
                 <CardContent className="py-12 text-center text-sm text-muted-foreground">
                   Pulsa "Generar análisis" para obtener hallazgos basados en los resultados de {pop}.
