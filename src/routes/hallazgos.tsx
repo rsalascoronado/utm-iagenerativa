@@ -29,12 +29,26 @@ export const Route = createFileRoute("/hallazgos")({
   component: Hallazgos,
 });
 
+type PopState = {
+  loading: boolean;
+  error: string | null;
+  attempts: number;
+};
+
+const INITIAL_POP_STATE: PopState = { loading: false, error: null, attempts: 0 };
+
 function Hallazgos() {
-  const [loadingPop, setLoadingPop] = useState<PopKey | null>(null);
   const [data, setData] = useState<{ estudiantes?: Insights; docentes?: Insights }>({});
   const [staleAt, setStaleAt] = useState<{ estudiantes?: number; docentes?: number }>({});
-  const [error, setError] = useState<string | null>(null);
+  const [popState, setPopState] = useState<Record<PopKey, PopState>>({
+    estudiantes: { ...INITIAL_POP_STATE },
+    docentes: { ...INITIAL_POP_STATE },
+  });
   const generate = useServerFn(generateInsights);
+
+  function patchPop(pop: PopKey, patch: Partial<PopState>) {
+    setPopState((prev) => ({ ...prev, [pop]: { ...prev[pop], ...patch } }));
+  }
 
   // Hidratar desde localStorage al montar (segunda capa de respaldo).
   useEffect(() => {
@@ -54,8 +68,7 @@ function Hallazgos() {
   }, []);
 
   async function run(pop: PopKey) {
-    setLoadingPop(pop);
-    setError(null);
+    patchPop(pop, { loading: true, error: null });
     try {
       const result = (await generate({
         data: { population: pop, summary: summaryData[pop] as any },
@@ -66,8 +79,9 @@ function Hallazgos() {
         if (cached) {
           setData((prev) => ({ ...prev, [pop]: cached.data }));
           setStaleAt((prev) => ({ ...prev, [pop]: cached.savedAt }));
+          patchPop(pop, { error: null });
           toast.warning(
-            `Sin conexión: mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
+            `${pop}: sin conexión, mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
           );
           return;
         }
@@ -80,22 +94,24 @@ function Hallazgos() {
         return rest;
       });
       saveInsights(pop, result);
+      patchPop(pop, { error: null, attempts: 0 });
       toast.success(`Hallazgos generados para ${pop}`);
     } catch (e) {
       const cached = loadInsights(pop);
       if (cached) {
         setData((prev) => ({ ...prev, [pop]: cached.data }));
         setStaleAt((prev) => ({ ...prev, [pop]: cached.savedAt }));
+        patchPop(pop, { error: null });
         toast.warning(
-          `Sin conexión: mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
+          `${pop}: sin conexión, mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
         );
       } else {
         const msg = e instanceof Error ? e.message : "Error desconocido";
-        setError(msg);
-        toast.error(msg);
+        patchPop(pop, { error: msg, attempts: popState[pop].attempts + 1 });
+        toast.error(`${pop}: ${msg}`);
       }
     } finally {
-      setLoadingPop(null);
+      patchPop(pop, { loading: false });
     }
   }
 
@@ -127,14 +143,15 @@ function Hallazgos() {
                       {summaryData[pop].idx?.toFixed(2)}/5
                     </p>
                   </div>
-                  <Button onClick={() => run(pop)} disabled={loadingPop === pop}>
-                    {loadingPop === pop ? (
+                  <Button onClick={() => run(pop)} disabled={popState[pop].loading}>
+                    {popState[pop].loading ? (
                       <>
                         <Loader2 className="mr-1 h-4 w-4 animate-spin" /> Generando…
                       </>
                     ) : data[pop] ? (
                       <>
-                        <RefreshCw className="mr-1 h-4 w-4" /> Regenerar
+                        <RefreshCw className="mr-1 h-4 w-4" />{" "}
+                        {popState[pop].error ? "Reintentar" : "Regenerar"}
                       </>
                     ) : (
                       <>
@@ -146,10 +163,28 @@ function Hallazgos() {
               </CardHeader>
             </Card>
 
-            {error && loadingPop === null && (
+            {popState[pop].error && !popState[pop].loading && (
               <Card className="border-destructive/50 bg-destructive/5">
-                <CardContent className="flex items-center gap-2 py-4 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4" /> {error}
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm text-destructive">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>
+                      {popState[pop].error}
+                      {popState[pop].attempts > 1 && (
+                        <span className="ml-1 opacity-70">
+                          (intento {popState[pop].attempts})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => run(pop)}
+                    className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                  >
+                    <RefreshCw className="mr-1 h-3 w-3" /> Reintentar
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -230,7 +265,7 @@ function Hallazgos() {
               </div>
             )}
 
-            {!data[pop] && loadingPop !== pop && !error && (
+            {!data[pop] && !popState[pop].loading && !popState[pop].error && (
               <Card className="border-dashed">
                 <CardContent className="py-12 text-center text-sm text-muted-foreground">
                   Pulsa "Generar análisis" para obtener hallazgos basados en los resultados de {pop}.
