@@ -155,8 +155,8 @@ function Hallazgos() {
             )}
 
             {data[pop] && staleAt[pop] && (
-              <Card className="border-amber-500/40 bg-amber-500/5">
-                <CardContent className="flex flex-wrap items-center gap-2 py-3 text-sm text-amber-700 dark:text-amber-300">
+              <Card className="border-[var(--warning)]/40 bg-[var(--warning)]/5">
+                <CardContent className="flex flex-wrap items-center gap-2 py-3 text-sm text-[var(--warning)]">
                   <WifiOff className="h-4 w-4" />
                   <span>
                     Mostrando análisis previo guardado el{" "}
