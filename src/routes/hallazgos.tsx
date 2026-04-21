@@ -29,12 +29,26 @@ export const Route = createFileRoute("/hallazgos")({
   component: Hallazgos,
 });
 
+type PopState = {
+  loading: boolean;
+  error: string | null;
+  attempts: number;
+};
+
+const INITIAL_POP_STATE: PopState = { loading: false, error: null, attempts: 0 };
+
 function Hallazgos() {
-  const [loadingPop, setLoadingPop] = useState<PopKey | null>(null);
   const [data, setData] = useState<{ estudiantes?: Insights; docentes?: Insights }>({});
   const [staleAt, setStaleAt] = useState<{ estudiantes?: number; docentes?: number }>({});
-  const [error, setError] = useState<string | null>(null);
+  const [popState, setPopState] = useState<Record<PopKey, PopState>>({
+    estudiantes: { ...INITIAL_POP_STATE },
+    docentes: { ...INITIAL_POP_STATE },
+  });
   const generate = useServerFn(generateInsights);
+
+  function patchPop(pop: PopKey, patch: Partial<PopState>) {
+    setPopState((prev) => ({ ...prev, [pop]: { ...prev[pop], ...patch } }));
+  }
 
   // Hidratar desde localStorage al montar (segunda capa de respaldo).
   useEffect(() => {
@@ -54,8 +68,7 @@ function Hallazgos() {
   }, []);
 
   async function run(pop: PopKey) {
-    setLoadingPop(pop);
-    setError(null);
+    patchPop(pop, { loading: true, error: null });
     try {
       const result = (await generate({
         data: { population: pop, summary: summaryData[pop] as any },
@@ -66,8 +79,9 @@ function Hallazgos() {
         if (cached) {
           setData((prev) => ({ ...prev, [pop]: cached.data }));
           setStaleAt((prev) => ({ ...prev, [pop]: cached.savedAt }));
+          patchPop(pop, { error: null });
           toast.warning(
-            `Sin conexión: mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
+            `${pop}: sin conexión, mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
           );
           return;
         }
@@ -80,22 +94,24 @@ function Hallazgos() {
         return rest;
       });
       saveInsights(pop, result);
+      patchPop(pop, { error: null, attempts: 0 });
       toast.success(`Hallazgos generados para ${pop}`);
     } catch (e) {
       const cached = loadInsights(pop);
       if (cached) {
         setData((prev) => ({ ...prev, [pop]: cached.data }));
         setStaleAt((prev) => ({ ...prev, [pop]: cached.savedAt }));
+        patchPop(pop, { error: null });
         toast.warning(
-          `Sin conexión: mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
+          `${pop}: sin conexión, mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
         );
       } else {
         const msg = e instanceof Error ? e.message : "Error desconocido";
-        setError(msg);
-        toast.error(msg);
+        patchPop(pop, { error: msg, attempts: popState[pop].attempts + 1 });
+        toast.error(`${pop}: ${msg}`);
       }
     } finally {
-      setLoadingPop(null);
+      patchPop(pop, { loading: false });
     }
   }
 
