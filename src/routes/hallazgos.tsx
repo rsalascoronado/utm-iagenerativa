@@ -4,19 +4,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Loader2, RefreshCw, Sparkles, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { Loader2, RefreshCw, Sparkles, AlertCircle, WifiOff } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { summaryData } from "@/lib/data";
 import { generateInsights } from "@/server/insights.functions";
 import { useServerFn } from "@tanstack/react-start";
+import {
+  loadInsights,
+  saveInsights,
+  formatSavedAt,
+  type Insights,
+} from "@/lib/insightsCache";
 
-type Insights = {
-  resumen: string[];
-  fortalezas: { titulo: string; detalle: string }[];
-  oportunidades: { titulo: string; detalle: string }[];
-  recomendaciones: { dimension: string; accion: string }[];
-};
+type PopKey = "estudiantes" | "docentes";
 
 export const Route = createFileRoute("/hallazgos")({
   head: () => ({
@@ -29,25 +30,70 @@ export const Route = createFileRoute("/hallazgos")({
 });
 
 function Hallazgos() {
-  const [loadingPop, setLoadingPop] = useState<"estudiantes" | "docentes" | null>(null);
+  const [loadingPop, setLoadingPop] = useState<PopKey | null>(null);
   const [data, setData] = useState<{ estudiantes?: Insights; docentes?: Insights }>({});
+  const [staleAt, setStaleAt] = useState<{ estudiantes?: number; docentes?: number }>({});
   const [error, setError] = useState<string | null>(null);
   const generate = useServerFn(generateInsights);
 
-  async function run(pop: "estudiantes" | "docentes") {
+  // Hidratar desde localStorage al montar (segunda capa de respaldo).
+  useEffect(() => {
+    const next: { estudiantes?: Insights; docentes?: Insights } = {};
+    const stale: { estudiantes?: number; docentes?: number } = {};
+    (["estudiantes", "docentes"] as const).forEach((pop) => {
+      const cached = loadInsights(pop);
+      if (cached) {
+        next[pop] = cached.data;
+        stale[pop] = cached.savedAt;
+      }
+    });
+    if (Object.keys(next).length) {
+      setData(next);
+      setStaleAt(stale);
+    }
+  }, []);
+
+  async function run(pop: PopKey) {
     setLoadingPop(pop);
     setError(null);
     try {
       const result = (await generate({
         data: { population: pop, summary: summaryData[pop] as any },
-      })) as Insights | { error: string };
-      if ("error" in result) throw new Error(result.error);
+      })) as Insights | { error: string; offline?: boolean };
+
+      if ("error" in result) {
+        const cached = loadInsights(pop);
+        if (cached) {
+          setData((prev) => ({ ...prev, [pop]: cached.data }));
+          setStaleAt((prev) => ({ ...prev, [pop]: cached.savedAt }));
+          toast.warning(
+            `Sin conexión: mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
+          );
+          return;
+        }
+        throw new Error(result.error);
+      }
+
       setData((prev) => ({ ...prev, [pop]: result }));
+      setStaleAt((prev) => {
+        const { [pop]: _omit, ...rest } = prev;
+        return rest;
+      });
+      saveInsights(pop, result);
       toast.success(`Hallazgos generados para ${pop}`);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Error desconocido";
-      setError(msg);
-      toast.error(msg);
+      const cached = loadInsights(pop);
+      if (cached) {
+        setData((prev) => ({ ...prev, [pop]: cached.data }));
+        setStaleAt((prev) => ({ ...prev, [pop]: cached.savedAt }));
+        toast.warning(
+          `Sin conexión: mostrando análisis previo (${formatSavedAt(cached.savedAt)})`,
+        );
+      } else {
+        const msg = e instanceof Error ? e.message : "Error desconocido";
+        setError(msg);
+        toast.error(msg);
+      }
     } finally {
       setLoadingPop(null);
     }
